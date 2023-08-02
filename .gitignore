@@ -1,0 +1,71 @@
+# .gitignore for Python project and popular IDEs (PyCharm, VSCode, Jupyter)
+
+# Python files
+*.py[cod]
+*.pyo
+*.pyc
+*.pyd
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+*.sdist
+*.develop-eggs
+*.installed.cfg
+lib/
+lib64/
+*.bak
+
+# Test/log reports
+*.log
+*.csv
+*.dat
+*.out
+*.pid
+*.xml
+*.pyc
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter notebook
+.ipynb_checkpoints
+
+# Pycharm (JetBrains IDE)
+.idea/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Environments
+.env
+.venv
+.env/
+.venv/
+ENV/
+env/
+venv/
+ENV.bak/
+env.bak/
+venv.bak/
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
