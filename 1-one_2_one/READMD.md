@@ -1,27 +1,44 @@
-# One-to-one rpc demo
+# One-to-One RPC Demo with PyTorch
 
-## Runable
+This application demonstrates a one-to-one RPC communication using PyTorch's RPC framework. The setup consists of a server coordinating with a single worker.
+
+## How to Run
+
+1. Navigate to the server directory and start the server:
+
 ```bash
 cd server
 python server.py
-
-cd worker
-python worker.py 
 ```
 
-## What is the relationship between worker and server?
+2. In a separate terminal, navigate to the worker directory and start the worker:
 
-In the context of the PyTorch RPC (Remote Procedure Call) framework, a worker and a server are both nodes in a distributed system that can execute RPCs.
+```bash
+cd worker
+python worker.py
+```
 
-1. **Worker:** In distributed computing, a worker usually refers to a computing unit (a CPU or a GPU, for example) that is responsible for performing tasks assigned by a central authority (like a server or master node). In the given PyTorch RPC code, the worker is defined to perform specific functions (`add_tensors`) that the server can call remotely.
+## Architecture Overview
 
-2. **Server:** In the RPC setting, the server (also known as the master node) typically orchestrates the distributed system by assigning tasks to the workers and gathering results from them. The server in the provided code is responsible for initializing the RPC system, creating the data (two tensors), making an RPC to the worker to execute a function on the data, and then retrieving and printing the results.
+### Server
+The server acts as a coordinator, initiating RPC calls and orchestrating the entire process. It sends data to the worker for processing and then retrieves the results.
 
-The relationship between the worker and server is a master-slave relationship. The server can call functions on the worker remotely, get the results, and use these results for further computation. The worker executes the function calls it receives from the server.
+### Worker
+The worker receives tasks from the server, processes them, and sends the results back. It is defined to execute specific functions that the server can call remotely.
 
-Please note that in a more advanced setting, the distinction between workers and servers can blur, with nodes capable of acting as both a server and a worker – sending and receiving RPCs. This could lead to more complex and versatile distributed systems.
+## Design Insights
+
+### Relationship between Worker and Server
+In the context of this demo:
+
+- **Worker:** A computational unit that performs tasks upon receiving RPCs. It processes data and functions as per the remote calls from the server.
+  
+- **Server:** Acts as the orchestrator, making RPCs to the worker, directing it to execute certain tasks, and gathering the results.
+
+While the server-worker relationship can often be viewed as master-slave, with the server directing operations, it's essential to understand that more complex setups can blur these roles, enabling nodes to function both as servers and workers.
 
 ## Tips
 
-- The function or the project structure on the server side and client should be the same, in order to call functions relatively.
-- You can even use dummy function with no implementation but the same name on the server side, if the server.py never use this function doing real things.
+- Ensure consistency in project or function structures between the server and worker. This facilitates relative function calls without conflicts.
+  
+- If a function exists on the worker but isn't needed for computation on the server, you can create a dummy function with the same name on the server. This placeholder ensures compatibility without the need for actual implementation on the server side.
