@@ -5,52 +5,52 @@ import torch.distributed.rpc as rpc
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.models as models
-import torch.utils.model_zoo as model_zoo
-
-
 from tqdm import tqdm
 
-# Initialize the model
-# Load pretrained ResNet18 model
+# --- MODEL SETUP ---
+# Load the pretrained ResNet18 model
 model = models.resnet18(pretrained=True)
 
-# Change the input layer
-model.conv1 = torch.nn.Conv2d(
+# Modify the input layer to take single channel (grayscale) images
+model.conv1 = nn.Conv2d(
     1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False
 )
 
-# Change the output layer
-model.fc = torch.nn.Linear(in_features=512, out_features=10, bias=True)
+# Modify the output layer to have 10 output classes
+model.fc = nn.Linear(in_features=512, out_features=10, bias=True)
 
+# Split the model into different segments
 model = nn.ModuleList(
     [
-        nn.Sequential(*list(model.children())[:5]),
-        nn.Sequential(*list(model.children())[5:6]),
-        nn.Sequential(*list(model.children())[6:7]),
-        nn.Sequential(*list(model.children())[7:9]),
-        nn.Sequential(nn.Flatten(), *list(model.children())[9:]),
+        nn.Sequential(*list(model.children())[:5]),  # First segment
+        nn.Sequential(*list(model.children())[5:6]),  # Second segment
+        nn.Sequential(*list(model.children())[6:7]),  # Third segment
+        nn.Sequential(*list(model.children())[7:9]),  # Fourth segment
+        nn.Sequential(nn.Flatten(), *list(model.children())[9:]),  # Fifth segment
     ]
 )
 
-# Train all layers in central nodes
+# Ensure all layers are trainable on central nodes
 for param in model.parameters():
     param.requires_grad = True
 
+# Move the model to the GPU
 model = model.cuda()
 
 
 def run_server():
+    # --- RPC SETUP ---
     options = rpc.TensorPipeRpcBackendOptions(init_method="tcp://localhost:8080")
+    # Setting up device map for edge nodes
     options.set_device_map("edge1", {0: 0})  # Maps central's GPU 0 to edge1's GPU 0
     options.set_device_map("edge2", {0: 0})  # Maps central's GPU 0 to edge2's GPU 0
-
     rpc.init_rpc("central", rank=0, world_size=3, rpc_backend_options=options)
 
+    # --- DATA LOADING ---
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
     )
 
-    # Load train set
     trainset = torchvision.datasets.MNIST(
         root="./data", train=True, download=True, transform=transform
     )
@@ -58,7 +58,6 @@ def run_server():
         trainset, batch_size=128, shuffle=True, num_workers=16
     )
 
-    # Load test set
     testset = torchvision.datasets.MNIST(
         root="./data", train=False, download=True, transform=transform
     )
@@ -66,21 +65,17 @@ def run_server():
         testset, batch_size=128, shuffle=False, num_workers=16
     )
 
+    # --- OPTIMIZER AND LOSS ---
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters())
 
-    # Create the checkpoints directory if it doesn't exist
+    # --- CHECKPOINT HANDLING ---
     checkpoints_dir = "checkpoints"
     if not os.path.exists(checkpoints_dir):
-        try:
-            os.makedirs(checkpoints_dir)
-        except OSError as e:
-            print(f"Error creating directory: {checkpoints_dir} : {str(e)}")
-            return
+        os.makedirs(checkpoints_dir)
 
-    # Load checkpoint if it exists
     model_name = "resnet"
-    uid = "01010"  # Change this to your actual UID
+    uid = "01010"  # Replace with a unique identifier
     checkpoint_path = f"checkpoints/{model_name}_{uid}.pth"
     start_epoch = 0
 
@@ -91,44 +86,30 @@ def run_server():
         start_epoch = checkpoint["epoch"]
         print(f"Loaded checkpoint from epoch {start_epoch}")
 
-    # Specify the number of epochs
+    # --- TRAINING LOOP ---
     epochs = start_epoch + 5
-
     for epoch in range(start_epoch, epochs):
         losses = []
         for i, data in tqdm(enumerate(trainloader, 0)):
             inputs, labels = data
-            inputs, labels = inputs.to("cuda"), labels.to("cuda")
+            inputs, labels = inputs.cuda(), labels.cuda()
 
-            # Forward through first layer
+            # Forward pass through segments of the model
             x = model[0](inputs)
-
-            # Forward through second layer (edge node 1)
             x = rpc.rpc_sync("edge1", model[1], args=(x,))
-
-            # Forward through third layer
             x = model[2](x)
-
-            # Forward through fourth layer (edge node 2)
             x = rpc.rpc_sync("edge2", model[3], args=(x,))
-
-            # Forward through fifth layer
             output = model[4](x)
 
-            # Compute loss
+            # Compute loss and backpropagate
             loss = loss_fn(output, labels)
-
-            # Backward and optimize
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
             losses.append(loss.item())
 
-        # print statistics
+        # Logging and saving
         print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1, sum(losses) / len(losses)))
-
-        # Save checkpoint at the end of each epoch
         torch.save(
             {
                 "epoch": epoch + 1,
@@ -139,14 +120,15 @@ def run_server():
         )
         print(f"Saved checkpoint for epoch {epoch + 1}")
 
-    # Evaluate the model on the test set
+    # --- MODEL EVALUATION ---
     correct = 0
     total = 0
     with torch.no_grad():
         for data in testloader:
             images, labels = data
-            images, labels = images.to("cuda"), labels.to("cuda")
+            images, labels = images.cuda(), labels.cuda()
 
+            # Forward pass through segments of the model
             x = model[0](images)
             x = rpc.rpc_sync("edge1", model[1], args=(x,))
             x = model[2](x)

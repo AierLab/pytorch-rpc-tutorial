@@ -1,5 +1,3 @@
-# my_functions.py
-
 import torch
 import torch.distributed.rpc as rpc
 
@@ -16,16 +14,22 @@ def middle_to_end(x):
 
 def start_to_middle(x, y):
     """
-    Adds two tensors and returns the result.
+    Adds two tensors together and then forwards the result to the 'end' node
+    to further process the result.
 
     :param x: A PyTorch tensor
     :param y: Another PyTorch tensor
-    :return: The result of adding x and y
+    :return: The processed result from the 'end' node
     """
-    z = torch.add(x, y)
-    print(f"Result from end via middle: {z}")
 
-    # Call the 'end' node asynchronously
+    # Add the two tensors together
+    z = torch.add(x, y)
+
+    # Print the intermediate result
+    print(f"Intermediate result at middle: {z}")
+
+    # Make a synchronous RPC call to the 'end' node for further processing
     result = rpc.rpc_sync("end", middle_to_end, args=(z,))
 
+    # Return the final result
     return result
